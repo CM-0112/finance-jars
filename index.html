@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#16302B">
+<title>Jars — money tracker</title>
+<style>
+  :root{
+    --ink:#16302B; --ink-soft:#3A4D47; --bg:#EEF1F0; --card:#FFFFFF;
+    --line:#DCE2E0; --muted:#6B7770; --text:#19211E; --gold:#C9A227;
+    --danger:#C0492F; --good:#2A7F7A;
+    --r:16px; --shadow:0 1px 2px rgba(20,40,35,.05),0 6px 20px rgba(20,40,35,.06);
+    --tap:46px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;line-height:1.45;}
+  .num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;}
+  .app{max-width:760px;margin:0 auto;padding:0 16px 120px;}
+  header.top{padding:22px 2px 8px;display:flex;align-items:flex-end;justify-content:space-between;gap:12px;}
+  .brand{display:flex;align-items:center;gap:10px;}
+  .mark{width:30px;height:30px;border-radius:8px;background:var(--ink);position:relative;flex:none;}
+  .mark::after{content:"";position:absolute;left:6px;right:6px;bottom:5px;height:11px;border-radius:0 0 4px 4px;background:var(--gold);}
+  .mark::before{content:"";position:absolute;left:9px;right:9px;top:6px;height:4px;border-radius:2px;background:#fff;opacity:.85;}
+  h1{font-size:20px;letter-spacing:-.02em;color:var(--ink);font-weight:700;}
+  .tagline{font-size:12.5px;color:var(--muted);}
+  .summary{text-align:right;}
+  .summary .lbl{font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);}
+  .summary .big{font-size:22px;font-weight:700;color:var(--ink);letter-spacing:-.02em;}
+
+  nav.tabs{display:flex;gap:4px;background:#E2E7E5;border-radius:12px;padding:4px;margin:14px 0 18px;}
+  nav.tabs button{flex:1;border:0;background:transparent;padding:10px 8px;border-radius:9px;
+    font-size:14px;font-weight:600;color:var(--ink-soft);cursor:pointer;min-height:var(--tap);}
+  nav.tabs button[aria-selected="true"]{background:var(--card);color:var(--ink);box-shadow:var(--shadow);}
+
+  .warn{background:#FBEFE9;border:1px solid #EDC9BC;color:#7A2E18;border-radius:12px;
+    padding:11px 13px;font-size:13px;margin-bottom:16px;}
+  .warn b{font-weight:700;}
+
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;}
+  @media(min-width:560px){.grid{grid-template-columns:repeat(3,1fr);}}
+  .jar{position:relative;overflow:hidden;background:var(--card);border:1px solid var(--line);
+    border-radius:var(--r);min-height:138px;padding:14px;box-shadow:var(--shadow);
+    display:flex;flex-direction:column;justify-content:space-between;}
+  .jar .liquid{position:absolute;left:0;right:0;bottom:0;height:0%;
+    transition:height .6s cubic-bezier(.22,1,.36,1);z-index:0;}
+  .jar .liquid::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;opacity:.9;}
+  .jar > *{position:relative;z-index:1;}
+  .jar .jtype{font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);}
+  .jar .jname{font-size:14px;font-weight:700;color:var(--ink);letter-spacing:-.01em;line-height:1.2;margin-top:1px;}
+  .jar .jbal{font-size:20px;font-weight:700;letter-spacing:-.02em;}
+  .jar .jsub{font-size:11.5px;color:var(--muted);}
+  .jar.over .jbal{color:var(--danger);}
+  .jar .flag{display:inline-block;font-size:10px;font-weight:700;color:var(--danger);
+    background:#FBE6E0;border-radius:6px;padding:1px 6px;margin-top:3px;}
+
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+    box-shadow:var(--shadow);padding:16px;margin-bottom:14px;}
+  .panel h2{font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:12px;font-weight:700;}
+
+  .row{display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:11px 0;border-top:1px solid var(--line);}
+  .row:first-of-type{border-top:0;}
+  .row .meta{min-width:0;}
+  .row .meta .t{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .row .meta .s{font-size:12px;color:var(--muted);}
+  .row .amt{font-weight:700;font-size:15px;white-space:nowrap;}
+  .dot{width:9px;height:9px;border-radius:50%;flex:none;display:inline-block;margin-right:7px;vertical-align:middle;}
+  .del{border:0;background:none;color:var(--muted);font-size:18px;cursor:pointer;
+    width:34px;height:34px;border-radius:8px;flex:none;}
+  .del:hover{background:#F0F2F1;color:var(--danger);}
+  .empty{color:var(--muted);font-size:13.5px;padding:6px 0 2px;}
+
+  label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);margin:0 0 5px;}
+  input,select{width:100%;font:inherit;padding:11px 12px;border:1px solid var(--line);
+    border-radius:10px;background:#fff;color:var(--text);min-height:var(--tap);}
+  input:focus,select:focus{outline:2px solid var(--ink);outline-offset:1px;border-color:var(--ink);}
+  .field{margin-bottom:12px;}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+
+  .btn{border:0;border-radius:11px;padding:12px 16px;font:inherit;font-weight:700;
+    cursor:pointer;min-height:var(--tap);}
+  .btn.primary{background:var(--ink);color:#fff;width:100%;}
+  .btn.ghost{background:#EDF0EF;color:var(--ink);}
+  .btn.tiny{padding:7px 11px;font-size:13px;min-height:38px;}
+
+  .chips{display:flex;flex-wrap:wrap;gap:8px;}
+  .chip{border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:9px 13px;
+    font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;min-height:42px;}
+  .chip[aria-pressed="true"]{border-color:var(--ink);background:var(--ink);color:#fff;}
+  .chip[aria-pressed="true"] .dot{box-shadow:0 0 0 2px #fff inset;}
+
+  .jaredit{display:grid;grid-template-columns:18px 1fr 76px 116px 36px;gap:8px;align-items:center;
+    padding:8px 0;border-top:1px solid var(--line);}
+  .jaredit:first-of-type{border-top:0;}
+  .jaredit input,.jaredit select{min-height:40px;padding:8px 9px;}
+  .pctcheck{font-size:13px;font-weight:700;margin-top:10px;}
+  .pctcheck.ok{color:var(--good);} .pctcheck.bad{color:var(--danger);}
+  .settbar{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;}
+
+  .fab{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom));
+    background:var(--gold);color:#2A2206;border:0;border-radius:999px;padding:15px 26px;font-size:15px;
+    font-weight:800;box-shadow:0 8px 24px rgba(201,162,39,.42);cursor:pointer;z-index:30;letter-spacing:-.01em;}
+
+  .scrim{position:fixed;inset:0;background:rgba(15,30,26,.45);z-index:40;display:none;
+    align-items:flex-end;justify-content:center;}
+  .scrim.open{display:flex;}
+  .sheet{background:var(--bg);width:100%;max-width:520px;border-radius:20px 20px 0 0;
+    padding:18px 18px calc(20px + env(safe-area-inset-bottom));max-height:92vh;overflow:auto;
+    animation:rise .28s cubic-bezier(.22,1,.36,1);}
+  @media(min-width:560px){.scrim{align-items:center;}.sheet{border-radius:20px;}}
+  @keyframes rise{from{transform:translateY(40px);opacity:.4}to{transform:none;opacity:1}}
+  .sheet h2{font-size:18px;color:var(--ink);font-weight:700;margin-bottom:4px;}
+  .sheet .hint{font-size:12.5px;color:var(--muted);margin-bottom:16px;}
+  .bignum{text-align:center;font-size:34px;font-weight:800;border:0;letter-spacing:-.03em;}
+  .bignum:focus{outline:0;}
+
+  .storebar{font-size:12px;color:#7A2E18;background:#FBEFE9;border:1px solid #EDC9BC;
+    border-radius:10px;padding:8px 11px;margin-bottom:14px;display:none;}
+  @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <div class="mark" aria-hidden="true"></div>
+      <div>
+        <h1>Jars</h1>
+        <div class="tagline">Six jars, one income, no guesswork.</div>
+      </div>
+    </div>
+    <div class="summary">
+      <div class="lbl">Income tracked</div>
+      <div class="big num" id="sumIncome">$0</div>
+    </div>
+  </header>
+
+  <div class="storebar" id="storebar">Heads up: this preview can't save between sessions. Download the file and open it in your own browser to keep your data.</div>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-tab="dash">Jars</button>
+    <button role="tab" aria-selected="false" data-tab="income">Income</button>
+    <button role="tab" aria-selected="false" data-tab="settings">Settings</button>
+  </nav>
+
+  <!-- DASHBOARD -->
+  <section id="dash">
+    <div class="grid" id="jarGrid"></div>
+    <div class="panel" style="margin-top:14px;">
+      <h2>Recent activity</h2>
+      <div id="expList"></div>
+    </div>
+  </section>
+
+  <!-- INCOME -->
+  <section id="income" hidden>
+    <div class="panel">
+      <h2>Add income</h2>
+      <div class="field"><label for="incAmt">Net amount (take-home)</label>
+        <input id="incAmt" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00"></div>
+      <div class="two">
+        <div class="field"><label for="incSrc">Source</label>
+          <input id="incSrc" type="text" placeholder="Paycheck"></div>
+        <div class="field"><label for="incDate">Date</label>
+          <input id="incDate" type="date"></div>
+      </div>
+      <button class="btn primary" id="addInc">Add income</button>
+    </div>
+    <div class="panel">
+      <h2>Income history</h2>
+      <div id="incList"></div>
+    </div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="settings" hidden>
+    <div class="panel">
+      <h2>Your jars</h2>
+      <div class="jaredit" style="color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border:0;">
+        <span></span><span>Name</span><span>%</span><span>Type</span><span></span>
+      </div>
+      <div id="jarEdit"></div>
+      <div class="pctcheck" id="pctCheck"></div>
+      <div class="settbar">
+        <button class="btn ghost tiny" id="addJar">+ Add jar</button>
+        <button class="btn ghost tiny" id="resetJars">Reset to the classic six</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Your data</h2>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">Everything stays in this browser. Export a backup, or clear it all.</p>
+      <div class="settbar">
+        <button class="btn ghost tiny" id="exportBtn">Export backup</button>
+        <button class="btn ghost tiny" id="wipeBtn" style="color:var(--danger);">Erase everything</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<button class="fab" id="fab">+ Add expense</button>
+
+<!-- EXPENSE SHEET -->
+<div class="scrim" id="expScrim">
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="Add expense">
+    <h2>Add expense</h2>
+    <div class="hint">Log every purchase once — card or cash. Never log a credit-card <b>bill payment</b> here; those purchases are already counted.</div>
+    <div class="field"><input id="expAmt" class="bignum num" type="number" inputmode="decimal" min="0" step="0.01" placeholder="$0.00" aria-label="Amount"></div>
+    <div class="field"><label>Which jar?</label><div class="chips" id="jarChips"></div></div>
+    <div class="two">
+      <div class="field"><label for="expNote">Note</label><input id="expNote" type="text" placeholder="Groceries"></div>
+      <div class="field"><label for="expDate">Date</label><input id="expDate" type="date"></div>
+    </div>
+    <div class="field"><label for="expPaid">Paid with</label>
+      <select id="expPaid"><option>Cash / Debit</option><option>Credit card</option></select></div>
+    <button class="btn primary" id="saveExp">Save expense</button>
+    <button class="btn ghost" id="cancelExp" style="width:100%;margin-top:8px;">Cancel</button>
+  </div>
+</div>
+
+<script>
+const PALETTE=["#C9A227","#2A7F7A","#4C5BAE","#E0607E","#8E6BB0","#3E6B8C","#B5733B","#557A46"];
+const DEFAULTS=[
+  {id:"ff",  name:"Financial Freedom", pct:10, type:"accumulate", color:"#C9A227"},
+  {id:"lts", name:"Long-Term Savings", pct:10, type:"accumulate", color:"#2A7F7A"},
+  {id:"edu", name:"Education",         pct:10, type:"spend",      color:"#4C5BAE"},
+  {id:"play",name:"Play",              pct:10, type:"spend",      color:"#E0607E"},
+  {id:"give",name:"Give",              pct:10, type:"accumulate", color:"#8E6BB0"},
+  {id:"nec", name:"Necessities",       pct:50, type:"spend",      color:"#3E6B8C"},
+];
+const KEY="sixjar.v1";
+let memFallback=null; // used when storage is blocked (e.g. chat preview)
+
+function load(){
+  try{const raw=localStorage.getItem(KEY);if(raw)return JSON.parse(raw);}
+  catch(e){flagNoStore();}
+  if(memFallback)return memFallback;
+  return {jars:structuredClone(DEFAULTS),income:[],expenses:[]};
+}
+function save(){
+  try{localStorage.setItem(KEY,JSON.stringify(state));}
+  catch(e){flagNoStore();memFallback=structuredClone(state);}
+}
+function flagNoStore(){document.getElementById("storebar").style.display="block";}
+
+let state=load();
+const fmt=new Intl.NumberFormat("en-US",{style:"currency",currency:"USD",maximumFractionDigits:2});
+const fmt0=new Intl.NumberFormat("en-US",{style:"currency",currency:"USD",maximumFractionDigits:0});
+const uid=()=>Math.random().toString(36).slice(2,9);
+const today=()=>new Date().toISOString().slice(0,10);
+const totalIncome=()=>state.income.reduce((s,i)=>s+(+i.amount||0),0);
+const spentFor=id=>state.expenses.filter(e=>e.jarId===id).reduce((s,e)=>s+(+e.amount||0),0);
+const jarById=id=>state.jars.find(j=>j.id===id);
+
+function hexA(hex,a){const n=parseInt(hex.slice(1),16);return `rgba(${n>>16&255},${n>>8&255},${n&255},${a})`;}
+
+/* ---------- Dashboard ---------- */
+function renderDash(){
+  const inc=totalIncome();
+  document.getElementById("sumIncome").textContent=fmt0.format(inc);
+  const grid=document.getElementById("jarGrid");grid.innerHTML="";
+  state.jars.forEach(j=>{
+    const alloc=inc*(j.pct/100), spent=spentFor(j.id), bal=alloc-spent;
+    const fill=alloc>0?Math.max(0,Math.min(1,bal/alloc)):0;
+    const over=bal<-0.005;
+    const card=document.createElement("div");
+    card.className="jar"+(over?" over":"");
+    const sub=j.type==="accumulate"
+      ? `${fmt0.format(spent)} withdrawn`
+      : `${fmt0.format(spent)} of ${fmt0.format(alloc)} used`;
+    const target=over?0:fill*100;
+    card.innerHTML=`
+      <div class="liquid" style="height:0%;background:${hexA(j.color,.16)}">
+        <span style="position:absolute;top:0;left:0;right:0;height:3px;background:${j.color};opacity:.85"></span>
+      </div>
+      <div>
+        <div class="jtype">${j.type==="accumulate"?"Accumulating":"Spending"}</div>
+        <div class="jname">${escapeHtml(j.name)}</div>
+      </div>
+      <div>
+        <div class="jbal num">${fmt0.format(bal)}</div>
+        <div class="jsub num">${sub}</div>
+        ${over?'<span class="flag">over budget</span>':''}
+      </div>`;
+    grid.appendChild(card);
+    const liq=card.querySelector(".liquid");
+    requestAnimationFrame(()=>{liq.style.height=target+"%";});
+  });
+  renderExpList();
+}
+function renderExpList(){
+  const box=document.getElementById("expList");
+  const items=[...state.expenses].sort((a,b)=>(b.date||"").localeCompare(a.date||"")||0).slice(0,12);
+  if(!items.length){box.innerHTML='<div class="empty">No expenses yet. Tap “Add expense” to start.</div>';return;}
+  box.innerHTML="";
+  items.forEach(e=>{
+    const j=jarById(e.jarId)||{name:"—",color:"#999"};
+    const row=document.createElement("div");row.className="row";
+    row.innerHTML=`<div class="meta">
+        <div class="t"><span class="dot" style="background:${j.color}"></span>${escapeHtml(e.note||j.name)}</div>
+        <div class="s">${escapeHtml(j.name)} · ${e.date||""}${e.paidWith?(" · "+e.paidWith):""}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;">
+        <span class="amt num">−${fmt.format(+e.amount||0)}</span>
+        <button class="del" aria-label="Delete">×</button>
+      </div>`;
+    row.querySelector(".del").onclick=()=>{state.expenses=state.expenses.filter(x=>x.id!==e.id);save();renderDash();};
+    box.appendChild(row);
+  });
+}
+
+/* ---------- Income ---------- */
+function renderIncome(){
+  const box=document.getElementById("incList");
+  const items=[...state.income].sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+  if(!items.length){box.innerHTML='<div class="empty">No income yet. Add a paycheck above to fund your jars.</div>';return;}
+  box.innerHTML="";
+  items.forEach(i=>{
+    const row=document.createElement("div");row.className="row";
+    row.innerHTML=`<div class="meta"><div class="t">${escapeHtml(i.source||"Income")}</div>
+        <div class="s">${i.date||""}</div></div>
+      <div style="display:flex;align-items:center;gap:4px;">
+        <span class="amt num" style="color:var(--good)">+${fmt.format(+i.amount||0)}</span>
+        <button class="del" aria-label="Delete">×</button></div>`;
+    row.querySelector(".del").onclick=()=>{state.income=state.income.filter(x=>x.id!==i.id);save();renderIncome();renderDash();};
+    box.appendChild(row);
+  });
+}
+
+/* ---------- Settings ---------- */
+function renderSettings(){
+  const box=document.getElementById("jarEdit");box.innerHTML="";
+  state.jars.forEach((j,idx)=>{
+    const r=document.createElement("div");r.className="jaredit";
+    r.innerHTML=`<span class="dot" style="background:${j.color}"></span>
+      <input value="${escapeHtml(j.name)}" aria-label="Jar name">
+      <input type="number" min="0" step="1" value="${j.pct}" inputmode="decimal" aria-label="Percent">
+      <select aria-label="Type">
+        <option value="spend"${j.type==="spend"?" selected":""}>Spending</option>
+        <option value="accumulate"${j.type==="accumulate"?" selected":""}>Accumulating</option>
+      </select>
+      <button class="del" aria-label="Remove jar">×</button>`;
+    const [nameI,pctI,typeS]=r.querySelectorAll("input,select");
+    nameI.onchange=e=>{j.name=e.target.value||"Jar";save();};
+    pctI.onchange=e=>{j.pct=Math.max(0,+e.target.value||0);save();checkPct();renderDash();};
+    typeS.onchange=e=>{j.type=e.target.value;save();renderDash();};
+    r.querySelector(".del").onclick=()=>{
+      if(state.jars.length<=1)return;
+      state.jars.splice(idx,1);save();renderSettings();renderDash();};
+    box.appendChild(r);
+  });
+  checkPct();
+}
+function checkPct(){
+  const sum=state.jars.reduce((s,j)=>s+(+j.pct||0),0);
+  const el=document.getElementById("pctCheck");
+  if(Math.abs(sum-100)<.01){el.className="pctcheck ok";el.textContent="✓ Your jars total 100%.";}
+  else{el.className="pctcheck bad";el.textContent=`Your jars total ${sum}% — adjust until they reach 100% or your allocations won't add up to your income.`;}
+}
+
+/* ---------- Expense sheet ---------- */
+let pickedJar=null;
+function openExp(){
+  pickedJar=state.jars[0]?.id||null;
+  document.getElementById("expAmt").value="";
+  document.getElementById("expNote").value="";
+  document.getElementById("expDate").value=today();
+  document.getElementById("expPaid").value="Cash / Debit";
+  const chips=document.getElementById("jarChips");chips.innerHTML="";
+  state.jars.forEach(j=>{
+    const b=document.createElement("button");b.className="chip";b.type="button";
+    b.setAttribute("aria-pressed",j.id===pickedJar);
+    b.innerHTML=`<span class="dot" style="background:${j.color}"></span>${escapeHtml(j.name)}`;
+    b.onclick=()=>{pickedJar=j.id;[...chips.children].forEach(c=>c.setAttribute("aria-pressed","false"));b.setAttribute("aria-pressed","true");};
+    chips.appendChild(b);
+  });
+  document.getElementById("expScrim").classList.add("open");
+  setTimeout(()=>document.getElementById("expAmt").focus(),120);
+}
+function closeExp(){document.getElementById("expScrim").classList.remove("open");}
+
+/* ---------- wiring ---------- */
+function showTab(t){
+  document.querySelectorAll("nav.tabs button").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===t));
+  ["dash","income","settings"].forEach(s=>document.getElementById(s).hidden=(s!==t));
+  if(t==="dash")renderDash();if(t==="income")renderIncome();if(t==="settings")renderSettings();
+}
+document.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
+document.getElementById("fab").onclick=openExp;
+document.getElementById("cancelExp").onclick=closeExp;
+document.getElementById("expScrim").onclick=e=>{if(e.target.id==="expScrim")closeExp();};
+document.getElementById("saveExp").onclick=()=>{
+  const amt=parseFloat(document.getElementById("expAmt").value);
+  if(!(amt>0)||!pickedJar){document.getElementById("expAmt").focus();return;}
+  state.expenses.push({id:uid(),date:document.getElementById("expDate").value||today(),
+    jarId:pickedJar,amount:amt,note:document.getElementById("expNote").value.trim(),
+    paidWith:document.getElementById("expPaid").value});
+  save();closeExp();showTab("dash");
+};
+document.getElementById("addInc").onclick=()=>{
+  const amt=parseFloat(document.getElementById("incAmt").value);
+  if(!(amt>0)){document.getElementById("incAmt").focus();return;}
+  state.income.push({id:uid(),date:document.getElementById("incDate").value||today(),
+    source:document.getElementById("incSrc").value.trim()||"Income",amount:amt});
+  document.getElementById("incAmt").value="";document.getElementById("incSrc").value="";
+  save();renderIncome();
+};
+document.getElementById("addJar").onclick=()=>{
+  state.jars.push({id:uid(),name:"New jar",pct:0,type:"spend",color:PALETTE[state.jars.length%PALETTE.length]});
+  save();renderSettings();renderDash();
+};
+document.getElementById("resetJars").onclick=()=>{
+  if(confirm("Reset your jars to the classic six? Your income and expenses stay.")){
+    state.jars=structuredClone(DEFAULTS);save();renderSettings();renderDash();}
+};
+document.getElementById("exportBtn").onclick=()=>{
+  const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+  a.download="jars-backup-"+today()+".json";a.click();URL.revokeObjectURL(a.href);
+};
+document.getElementById("wipeBtn").onclick=()=>{
+  if(confirm("Erase ALL income and expenses? This can't be undone.")){
+    state.income=[];state.expenses=[];save();showTab("dash");}
+};
+function escapeHtml(s){return (s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+
+document.getElementById("incDate").value=today();
+showTab("dash");
+</script>
+</body>
+</html>
