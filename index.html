@@ -179,7 +179,7 @@
       <button id="allTimeBtn" class="mpill" aria-pressed="false">All time</button>
     </div>
     <div class="grid" id="jarGrid"></div>
-    <div class="panel" style="margin-top:14px;">
+    <div class="panel" id="activityPanel" style="margin-top:14px;">
       <h2>Recent activity</h2>
       <div id="expList"></div>
       <div id="expMore"></div>
@@ -345,7 +345,9 @@ function renderDash(){
     const liq=card.querySelector(".liquid");
     requestAnimationFrame(()=>{liq.style.height=target+"%";});
   });
-  renderExpList();
+  const ap=document.getElementById("activityPanel");
+  if(allTime){ap.style.display="none";}
+  else{ap.style.display="";renderExpList();}
 }
 function updateMonthBar(){
   document.getElementById("monthLabel").textContent=allTime?"All time":monthLabel(viewMonth);
