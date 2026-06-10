@@ -1,9 +1,9 @@
 # Jars — a 6-jar money tracker
 
 A small, private web app for managing money with the **6-jar system** (the JARS method
-from T. Harv Eker's *Secrets of the Millionaire Mind*). Every time you get paid, your
-net income is split across six jars by percentage. You log expenses against a jar and
-watch what's left.
+from T. Harv Eker's *Secrets of the Millionaire Mind*). Each time you get paid, your net
+income is split across six jars by percentage. You log expenses against a jar and watch
+what's left — for the current month, or across all time.
 
 **Live:** https://finance-jars.vercel.app — deployed on Vercel from this repo, so every
 commit to the main branch redeploys the site automatically.
@@ -21,89 +21,105 @@ commit to the main branch redeploys the site automatically.
 
 The percentages are a starting point, not a rule (see below).
 
+## Two views: this month and all time
+
+A month bar at the top of the dashboard lets you move between months or switch to an
+**All time** view. It opens on the current month, since the method runs on a monthly
+rhythm. Switching scope is purely a lens — it never changes your data.
+
+In the **month view**, every jar resets each month, so each one answers a clean question:
+
+- **Spending jars (Necessities, Education, Play):** "How much is left to spend this
+  month?" The month's allocation (that month's income × the jar's %) minus what you spent.
+- **Accumulating jars (Financial Freedom, Long-Term Savings, Give):** "Did I hit my
+  savings target this month?" The goal is that month's allocation; the jar shows how much
+  of it you kept, with a green **goal met** badge when you don't dip in.
+
+In the **all time** view, the jars show the cumulative picture: spending jars show
+lifetime budget remaining, and accumulating jars show their accumulated balance against
+the lifetime goal (total income × the jar's %), with total withdrawn. The recent-activity
+list is hidden in all time so you see just the totals.
+
 ## Why it's built the way it is
 
 These are the decisions behind the app, kept here so the "why" doesn't get lost.
 
-**The jars don't all behave the same way.** Treating all six as "budget minus spending
-equals remaining" would lose the point of the system. They split into two kinds:
-
-- *Spending jars* (Necessities, Education, Play) get funded each period and spent down.
-  "Remaining" is the number that matters. Play is meant to be **emptied** — that's the
-  whole idea, so a growing Play balance is a nudge to go enjoy it, not to hoard it.
-- *Accumulating jars* (Financial Freedom, Long-Term Savings, Give) grow over time and
-  get drawn down only in occasional lumps (an investment, a donation, a big purchase).
-  Here a rising balance is the goal. Financial Freedom is special: you never spend the
-  principal, so a big number there is the win.
-
-The app tags each jar as Spending or Accumulating and fills the jar accordingly.
+**The two jar types behave differently.** Treating all six as "budget minus spending"
+would lose the point of the system. Spending jars are meant to be spent down (Play
+especially — a full Play jar is a nudge to go enjoy it). Accumulating jars are meant to
+grow; the month view reframes them as monthly savings goals, while the all-time view keeps
+their cumulative balance front and centre.
 
 **One purchase, one entry — and never log the credit-card bill.** A jar tracks a *budget*,
-not the cash in your bank. So every real purchase decrements exactly one jar, once,
-whether you paid by card or cash — a credit card is a payment method, not a category.
-The trap is the monthly card bill: those purchases were already counted when they
-happened, so logging the bill payment too would double-count everything. The bill is a
-debt settlement, not an expense, and it never gets entered.
+not the cash in your bank. Every real purchase decrements exactly one jar, once, whether
+paid by card or cash — a credit card is a payment method, not a category. The monthly card
+bill is a debt settlement, not an expense; those purchases were already counted when they
+happened, so logging the bill would double-count everything.
 
 **The percentages are yours to change.** 50% for Necessities is unrealistic in many
 high-cost areas, and Eker himself says to adjust. The app lets you edit every percentage
 (with a checker that confirms they total 100%) and add or remove jars.
 
-**Balances are always recomputed from the log.** Rather than storing a running total per
-jar that could drift out of sync, the app derives each balance fresh from the income and
-expense lists every time. The same principle is baked into the spreadsheet version.
+**Balances are always recomputed from the log.** Rather than storing running totals that
+could drift, the app derives every figure fresh from the dated income and expense lists.
+That principle is what let the month view ship as a pure computed layer — no change to
+stored data, and the all-time view matches the original numbers exactly.
 
 ## What's been built
 
 **1. A spreadsheet (`six_jar_tracker.xlsx`) — the "brain."** Built first to nail down the
-math and the data model before any code: configurable jars with a 100% checker, an income
-log, an expense log with a jar dropdown, and a dashboard that allocates income and shows
-allocated / spent / remaining per jar. It's the same model the app uses, and it doubles as
-a place to validate the numbers.
+math and data model before any code: configurable jars with a 100% checker, an income log,
+an expense log with a jar dropdown, and a dashboard that allocates income and shows
+allocated / spent / remaining per jar.
 
 **2. The web app (`index.html`) — the daily tool.** A single self-contained file: all the
 styling and logic live inside it, nothing loads from the internet, and your data is stored
-locally in your browser. Three tabs (Jars, Income, Settings) plus an always-on **Add
-expense** button. The signature touch is the dashboard: each jar is a vessel that fills
-with its color — spending jars drain as you spend, accumulating jars stay full as they
-grow, and anything overspent turns red. The layout is tuned for both phone and desktop,
-including a two-row jar editor and a mobile-friendly date picker.
+locally in your browser. Highlights:
+
+- Three tabs (Jars, Income, Settings) plus an always-on **Add expense** button.
+- The signature dashboard: each jar is a vessel that fills with its colour — spending jars
+  drain as you spend, accumulating jars fill toward their goal, overspent jars turn red.
+- Month-by-month and all-time views with the savings-goal behaviour above.
+- Add, **edit**, and delete both expenses and income (a pencil icon reopens an entry
+  pre-filled). Credit card is the default payment method; amounts show to two decimals.
+- Recent activity shows the latest 8, with **Show all** to expand.
+- **Export / Import** backups as a JSON file, to move data between browsers or devices.
+  Export uses the share sheet on phones (Save to Files / AirDrop) and a download on desktop.
+- Tuned for both phone and desktop, including a two-row jar editor and a mobile date picker.
 
 ## Using the app
 
 1. Open https://finance-jars.vercel.app (or open `index.html` directly in a browser).
-2. On the **Income** tab, add your take-home pay.
-3. Tap **Add expense** whenever you spend — enter the amount, pick a jar, save.
-4. The **Jars** tab shows what's left everywhere. **Settings** lets you tune percentages,
-   rename jars, export a backup, or erase your data.
+2. On the **Income** tab, add your take-home pay. Income funds the month it's dated in, so
+   log a month's income to fund that month's jars.
+3. Tap **Add expense** whenever you spend — amount, jar, save.
+4. The **Jars** tab shows what's left (or saved) per jar; use the month bar to move between
+   months or see all time. **Settings** tunes percentages, renames jars, and holds
+   Export / Import / Erase.
 
-On a phone, open the live URL and "Add to Home Screen" — it launches full-screen like an
-app. Updating the app is just a commit: upload a new `index.html` to this repo and Vercel
+On a phone, open the live URL and "Add to Home Screen" to launch it full-screen like an
+app. Updates are just a commit: upload a new `index.html` to this repo and Vercel
 republishes within a minute.
 
 ## Known limitations (deliberate, for now)
 
-- **Cumulative, not monthly.** Balances are lifetime totals, so periods don't reset and
-  Play won't auto-empty each month. Treat a full Play jar as your cue to spend it.
 - **Jar budgets only.** The app tracks budget allocations, not your real bank balance —
-  which is exactly why the "never log the card bill" rule matters.
-- **Data lives in one browser.** Everything is stored in the browser you use it in, so
-  your phone and your laptop keep separate data and don't sync. Use Export to move a
-  backup between them for now.
+  which is why the "never log the card bill" rule matters.
+- **Data lives in one browser.** Everything is stored in the browser you use it in, so your
+  phone and laptop keep separate data and don't auto-sync. Export/Import moves it between them.
+- **Reset only, no carry-over.** Unspent money in a spending jar doesn't roll into next
+  month in the month view (the all-time view still holds the real lifetime totals).
+- **Percentages are global.** They're a single live setting, not saved per paycheck, so
+  changing a percentage recomputes past months too.
 
 ## Roadmap
 
-- **Monthly view alongside the cumulative view.** A per-month lens (this month's income,
-  spending, and what's left in each jar) on top of the lifetime totals, so periods reset
-  and Play empties each month — while the cumulative view stays available for the
-  accumulating jars.
-- **Sign-in so data syncs across mobile and desktop.** An account that stores your jars,
-  income, and expenses on a server so the same data follows you between devices. This is
-  the biggest step: it requires a real backend (server, database, and authentication) and
-  changes the privacy model below, since data would no longer live only on your device.
-  Vercel's serverless functions are a path to building it without leaving the current setup.
-- **Import to restore a backup.** A counterpart to Export, so a saved backup file can be
-  loaded back in.
+- **Sign-in so data syncs across mobile and desktop.** An account that stores data on a
+  server so it follows you between devices. The biggest step: it needs a real backend
+  (server, database, auth) and changes the privacy model below, so it will be opt-in.
+- **Per-jar rollover.** An option to carry unspent money forward month to month, per jar.
+- **Frozen history.** Snapshot each income's allocation at entry time so changing
+  percentages no longer rewrites past months.
 
 ## Privacy
 
