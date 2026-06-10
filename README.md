@@ -5,7 +5,7 @@ from T. Harv Eker's *Secrets of the Millionaire Mind*). Each time you get paid, 
 income is split across six jars by percentage. You log expenses against a jar and watch
 what's left — for the current month, or across all time.
 
-**Live:** https://finance-jars.vercel.app — deployed on Vercel from this repo, so every
+**Live:** https://jars-tracker.vercel.app — deployed on Vercel from this repo, so every
 commit to the main branch redeploys the site automatically.
 
 ## The six jars
