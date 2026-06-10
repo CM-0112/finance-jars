@@ -38,6 +38,14 @@
     padding:11px 13px;font-size:13px;margin-bottom:16px;}
   .warn b{font-weight:700;}
 
+  .monthbar{display:flex;align-items:center;gap:8px;margin-bottom:14px;}
+  .mbtn{border:1px solid var(--line);background:var(--card);width:38px;height:38px;border-radius:10px;
+    font-size:20px;line-height:1;color:var(--ink);cursor:pointer;flex:none;}
+  .mbtn:hover{background:#F0F2F1;}
+  .mlabel{flex:1;text-align:center;font-weight:700;color:var(--ink);font-size:15px;letter-spacing:-.01em;}
+  .mpill{border:1.5px solid var(--line);background:var(--card);border-radius:999px;padding:8px 14px;
+    font-size:13px;font-weight:600;color:var(--ink-soft);cursor:pointer;min-height:38px;flex:none;}
+  .mpill[aria-pressed="true"]{border-color:var(--ink);background:var(--ink);color:#fff;}
   .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;}
   @media(min-width:560px){.grid{grid-template-columns:repeat(3,1fr);}}
   .jar{position:relative;overflow:hidden;background:var(--card);border:1px solid var(--line);
@@ -54,6 +62,7 @@
   .jar.over .jbal{color:var(--danger);}
   .jar .flag{display:inline-block;font-size:10px;font-weight:700;color:var(--danger);
     background:#FBE6E0;border-radius:6px;padding:1px 6px;margin-top:3px;}
+  .jar .flag.good{color:var(--good);background:#E3F0EE;}
 
   .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
     box-shadow:var(--shadow);padding:16px;margin-bottom:14px;}
@@ -70,6 +79,9 @@
   .del{border:0;background:none;color:var(--muted);font-size:18px;cursor:pointer;
     width:34px;height:34px;border-radius:8px;flex:none;}
   .del:hover{background:#F0F2F1;color:var(--danger);}
+  .iconbtn{border:0;background:none;color:var(--muted);cursor:pointer;width:34px;height:34px;
+    border-radius:8px;flex:none;display:inline-flex;align-items:center;justify-content:center;}
+  .iconbtn:hover{background:#F0F2F1;color:var(--ink);}
   .empty{color:var(--muted);font-size:13.5px;padding:6px 0 2px;}
 
   label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);margin:0 0 5px;}
@@ -160,17 +172,24 @@
 
   <!-- DASHBOARD -->
   <section id="dash">
+    <div class="monthbar">
+      <button id="prevMonth" class="mbtn" aria-label="Previous month">‹</button>
+      <div class="mlabel" id="monthLabel">This month</div>
+      <button id="nextMonth" class="mbtn" aria-label="Next month">›</button>
+      <button id="allTimeBtn" class="mpill" aria-pressed="false">All time</button>
+    </div>
     <div class="grid" id="jarGrid"></div>
     <div class="panel" style="margin-top:14px;">
       <h2>Recent activity</h2>
       <div id="expList"></div>
+      <div id="expMore"></div>
     </div>
   </section>
 
   <!-- INCOME -->
   <section id="income" hidden>
     <div class="panel">
-      <h2>Add income</h2>
+      <h2 id="incFormTitle">Add income</h2>
       <div class="field"><label for="incAmt">Net amount (take-home)</label>
         <input id="incAmt" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00"></div>
       <div class="two">
@@ -180,6 +199,7 @@
           <input id="incDate" type="date"></div>
       </div>
       <button class="btn primary" id="addInc">Add income</button>
+      <button class="btn ghost" id="cancelInc" style="width:100%;margin-top:8px;display:none;">Cancel edit</button>
     </div>
     <div class="panel">
       <h2>Income history</h2>
@@ -203,11 +223,13 @@
     </div>
     <div class="panel">
       <h2>Your data</h2>
-      <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">Everything stays in this browser. Export a backup, or clear it all.</p>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">Everything stays in this browser. Export a backup, import it into another browser to move your data, or clear it all.</p>
       <div class="settbar">
         <button class="btn ghost tiny" id="exportBtn">Export backup</button>
+        <button class="btn ghost tiny" id="importBtn">Import backup</button>
         <button class="btn ghost tiny" id="wipeBtn" style="color:var(--danger);">Erase everything</button>
       </div>
+      <input type="file" id="importFile" accept="application/json,.json" hidden>
     </div>
   </section>
 </div>
@@ -217,7 +239,7 @@
 <!-- EXPENSE SHEET -->
 <div class="scrim" id="expScrim">
   <div class="sheet" role="dialog" aria-modal="true" aria-label="Add expense">
-    <h2>Add expense</h2>
+    <h2 id="expTitle">Add expense</h2>
     <div class="hint">Log every purchase once — card or cash. Never log a credit-card <b>bill payment</b> here; those purchases are already counted.</div>
     <div class="field"><input id="expAmt" class="bignum num" type="number" inputmode="decimal" min="0" step="0.01" placeholder="$0.00" aria-label="Amount"></div>
     <div class="field"><label>Which jar?</label><div class="chips" id="jarChips"></div></div>
@@ -268,20 +290,43 @@ const jarById=id=>state.jars.find(j=>j.id===id);
 
 function hexA(hex,a){const n=parseInt(hex.slice(1),16);return `rgba(${n>>16&255},${n>>8&255},${n&255},${a})`;}
 
+const clamp=v=>Math.max(0,Math.min(1,v));
+const ym=d=>(d||"").slice(0,7);
+const thisYM=()=>today().slice(0,7);
+function monthLabel(m){const [y,mo]=m.split("-");return new Date(+y,+mo-1,1).toLocaleString("en-US",{month:"long",year:"numeric"});}
+function shiftMonth(m,delta){const [y,mo]=m.split("-").map(Number);const d=new Date(y,mo-1+delta,1);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");}
+let allTime=false;
+let viewMonth=thisYM();
+const inScope=d=>allTime||ym(d)===viewMonth;
+
 /* ---------- Dashboard ---------- */
 function renderDash(){
-  const inc=totalIncome();
-  document.getElementById("sumIncome").textContent=fmt0.format(inc);
+  updateMonthBar();
+  const scopeIncome=state.income.filter(i=>inScope(i.date)).reduce((s,i)=>s+(+i.amount||0),0);
+  document.getElementById("sumIncome").textContent=fmt0.format(scopeIncome);
   const grid=document.getElementById("jarGrid");grid.innerHTML="";
   state.jars.forEach(j=>{
-    const alloc=inc*(j.pct/100), spent=spentFor(j.id), bal=alloc-spent;
-    const fill=alloc>0?Math.max(0,Math.min(1,bal/alloc)):0;
-    const over=bal<-0.005;
+    const alloc=scopeIncome*(j.pct/100);
+    const spent=state.expenses.filter(e=>e.jarId===j.id&&inScope(e.date)).reduce((s,e)=>s+(+e.amount||0),0);
+    let headline,sub,fill,over=false,goalMet=false;
+    if(j.type==="spend"){
+      // spending jars (any scope): budget remaining
+      const bal=alloc-spent;
+      over=bal<-0.005;
+      fill=alloc>0?clamp(bal/alloc):0;
+      headline=fmt.format(bal);
+      sub=`${fmt.format(spent)} of ${fmt.format(alloc)} used`;
+    }else{
+      // accumulating jars (any scope): savings goal = that period's allocation
+      const bal=alloc-spent;                 // saved this period (allocation minus withdrawals)
+      over=bal<-0.005;
+      fill=alloc>0?clamp(bal/alloc):0;
+      headline=fmt.format(bal);
+      sub=`of ${fmt.format(alloc)} goal`+(spent>0?` · ${fmt.format(spent)} withdrawn`:``);
+      goalMet=alloc>0&&bal>=alloc-0.005;
+    }
     const card=document.createElement("div");
     card.className="jar"+(over?" over":"");
-    const sub=j.type==="accumulate"
-      ? `${fmt0.format(spent)} withdrawn`
-      : `${fmt0.format(spent)} of ${fmt0.format(alloc)} used`;
     const target=over?0:fill*100;
     card.innerHTML=`
       <div class="liquid" style="height:0%;background:${hexA(j.color,.16)}">
@@ -292,9 +337,9 @@ function renderDash(){
         <div class="jname">${escapeHtml(j.name)}</div>
       </div>
       <div>
-        <div class="jbal num">${fmt0.format(bal)}</div>
+        <div class="jbal num">${headline}</div>
         <div class="jsub num">${sub}</div>
-        ${over?'<span class="flag">over budget</span>':''}
+        ${over?'<span class="flag">over budget</span>':(goalMet?'<span class="flag good">goal met</span>':'')}
       </div>`;
     grid.appendChild(card);
     const liq=card.querySelector(".liquid");
@@ -302,10 +347,18 @@ function renderDash(){
   });
   renderExpList();
 }
+function updateMonthBar(){
+  document.getElementById("monthLabel").textContent=allTime?"All time":monthLabel(viewMonth);
+  document.getElementById("allTimeBtn").setAttribute("aria-pressed",allTime);
+  document.getElementById("prevMonth").style.visibility=allTime?"hidden":"visible";
+  document.getElementById("nextMonth").style.visibility=allTime?"hidden":"visible";
+}
 function renderExpList(){
   const box=document.getElementById("expList");
-  const items=[...state.expenses].sort((a,b)=>(b.date||"").localeCompare(a.date||"")||0).slice(0,12);
-  if(!items.length){box.innerHTML='<div class="empty">No expenses yet. Tap “Add expense” to start.</div>';return;}
+  const more=document.getElementById("expMore");
+  const all=[...state.expenses].filter(e=>inScope(e.date)).sort((a,b)=>(b.date||"").localeCompare(a.date||"")||0);
+  if(!all.length){box.innerHTML=`<div class="empty">No expenses ${allTime?"yet":"in "+monthLabel(viewMonth)}. Tap “Add expense” to start.</div>`;more.innerHTML="";return;}
+  const items=showAllExp?all:all.slice(0,8);
   box.innerHTML="";
   items.forEach(e=>{
     const j=jarById(e.jarId)||{name:"—",color:"#999"};
@@ -314,13 +367,19 @@ function renderExpList(){
         <div class="t"><span class="dot" style="background:${j.color}"></span>${escapeHtml(e.note||j.name)}</div>
         <div class="s">${escapeHtml(j.name)} · ${e.date||""}${e.paidWith?(" · "+e.paidWith):""}</div>
       </div>
-      <div style="display:flex;align-items:center;gap:4px;">
+      <div style="display:flex;align-items:center;gap:2px;">
         <span class="amt num">−${fmt.format(+e.amount||0)}</span>
-        <button class="del" aria-label="Delete">×</button>
+        <button class="iconbtn editExp" aria-label="Edit expense"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+        <button class="del" aria-label="Delete expense">×</button>
       </div>`;
+    row.querySelector(".editExp").onclick=()=>openExp(e);
     row.querySelector(".del").onclick=()=>{state.expenses=state.expenses.filter(x=>x.id!==e.id);save();renderDash();};
     box.appendChild(row);
   });
+  if(all.length>8){
+    more.innerHTML=`<button class="btn ghost tiny" id="toggleAll" style="margin-top:12px;width:100%;">${showAllExp?"Show less":("Show all "+all.length+" expenses")}</button>`;
+    document.getElementById("toggleAll").onclick=()=>{showAllExp=!showAllExp;renderExpList();};
+  }else{more.innerHTML="";}
 }
 
 /* ---------- Income ---------- */
@@ -333,10 +392,15 @@ function renderIncome(){
     const row=document.createElement("div");row.className="row";
     row.innerHTML=`<div class="meta"><div class="t">${escapeHtml(i.source||"Income")}</div>
         <div class="s">${i.date||""}</div></div>
-      <div style="display:flex;align-items:center;gap:4px;">
+      <div style="display:flex;align-items:center;gap:2px;">
         <span class="amt num" style="color:var(--good)">+${fmt.format(+i.amount||0)}</span>
-        <button class="del" aria-label="Delete">×</button></div>`;
-    row.querySelector(".del").onclick=()=>{state.income=state.income.filter(x=>x.id!==i.id);save();renderIncome();renderDash();};
+        <button class="iconbtn editInc" aria-label="Edit income"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+        <button class="del" aria-label="Delete income">×</button></div>`;
+    row.querySelector(".editInc").onclick=()=>editIncome(i);
+    row.querySelector(".del").onclick=()=>{
+      state.income=state.income.filter(x=>x.id!==i.id);
+      if(editingIncId===i.id)resetIncForm();
+      save();renderIncome();renderDash();};
     box.appendChild(row);
   });
 }
@@ -374,12 +438,17 @@ function checkPct(){
 
 /* ---------- Expense sheet ---------- */
 let pickedJar=null;
-function openExp(){
-  pickedJar=state.jars[0]?.id||null;
-  document.getElementById("expAmt").value="";
-  document.getElementById("expNote").value="";
-  document.getElementById("expDate").value=today();
-  document.getElementById("expPaid").value="Cash / Debit";
+let editingExpId=null;
+let showAllExp=false;
+function openExp(exp){
+  editingExpId=exp?exp.id:null;
+  document.getElementById("expTitle").textContent=exp?"Edit expense":"Add expense";
+  document.getElementById("saveExp").textContent=exp?"Save changes":"Save expense";
+  pickedJar=exp?exp.jarId:(state.jars[0]?.id||null);
+  document.getElementById("expAmt").value=exp?(exp.amount):"";
+  document.getElementById("expNote").value=exp?(exp.note||""):"";
+  document.getElementById("expDate").value=exp?(exp.date||today()):today();
+  document.getElementById("expPaid").value=exp?(exp.paidWith||"Credit card"):"Credit card";
   const chips=document.getElementById("jarChips");chips.innerHTML="";
   state.jars.forEach(j=>{
     const b=document.createElement("button");b.className="chip";b.type="button";
@@ -391,7 +460,7 @@ function openExp(){
   document.getElementById("expScrim").classList.add("open");
   setTimeout(()=>document.getElementById("expAmt").focus(),120);
 }
-function closeExp(){document.getElementById("expScrim").classList.remove("open");}
+function closeExp(){document.getElementById("expScrim").classList.remove("open");editingExpId=null;}
 
 /* ---------- wiring ---------- */
 function showTab(t){
@@ -400,24 +469,69 @@ function showTab(t){
   if(t==="dash")renderDash();if(t==="income")renderIncome();if(t==="settings")renderSettings();
 }
 document.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
-document.getElementById("fab").onclick=openExp;
+document.getElementById("fab").onclick=()=>openExp();
+document.getElementById("prevMonth").onclick=()=>{allTime=false;viewMonth=shiftMonth(viewMonth,-1);showAllExp=false;renderDash();};
+document.getElementById("nextMonth").onclick=()=>{allTime=false;viewMonth=shiftMonth(viewMonth,1);showAllExp=false;renderDash();};
+document.getElementById("allTimeBtn").onclick=()=>{allTime=!allTime;if(!allTime&&!viewMonth)viewMonth=thisYM();showAllExp=false;renderDash();};
 document.getElementById("cancelExp").onclick=closeExp;
 document.getElementById("expScrim").onclick=e=>{if(e.target.id==="expScrim")closeExp();};
 document.getElementById("saveExp").onclick=()=>{
   const amt=parseFloat(document.getElementById("expAmt").value);
   if(!(amt>0)||!pickedJar){document.getElementById("expAmt").focus();return;}
-  state.expenses.push({id:uid(),date:document.getElementById("expDate").value||today(),
-    jarId:pickedJar,amount:amt,note:document.getElementById("expNote").value.trim(),
-    paidWith:document.getElementById("expPaid").value});
-  save();closeExp();showTab("dash");
+  const fields={
+    date:document.getElementById("expDate").value||today(),
+    jarId:pickedJar,amount:amt,
+    note:document.getElementById("expNote").value.trim(),
+    paidWith:document.getElementById("expPaid").value
+  };
+  if(editingExpId){
+    const ex=state.expenses.find(x=>x.id===editingExpId);
+    if(ex)Object.assign(ex,fields);
+  }else{
+    state.expenses.push({id:uid(),...fields});
+  }
+  save();closeExp();
+  allTime=false;viewMonth=ym(fields.date);showAllExp=false;
+  showTab("dash");
 };
+let editingIncId=null;
+function resetIncForm(){
+  editingIncId=null;
+  document.getElementById("incAmt").value="";
+  document.getElementById("incSrc").value="";
+  document.getElementById("incDate").value=today();
+  document.getElementById("incFormTitle").textContent="Add income";
+  document.getElementById("addInc").textContent="Add income";
+  document.getElementById("cancelInc").style.display="none";
+}
+function editIncome(inc){
+  editingIncId=inc.id;
+  document.getElementById("incAmt").value=inc.amount;
+  document.getElementById("incSrc").value=inc.source||"";
+  document.getElementById("incDate").value=inc.date||today();
+  document.getElementById("incFormTitle").textContent="Edit income";
+  document.getElementById("addInc").textContent="Save changes";
+  document.getElementById("cancelInc").style.display="block";
+  document.getElementById("incFormTitle").scrollIntoView({behavior:"smooth",block:"start"});
+  setTimeout(()=>document.getElementById("incAmt").focus(),120);
+}
+document.getElementById("cancelInc").onclick=resetIncForm;
 document.getElementById("addInc").onclick=()=>{
   const amt=parseFloat(document.getElementById("incAmt").value);
   if(!(amt>0)){document.getElementById("incAmt").focus();return;}
-  state.income.push({id:uid(),date:document.getElementById("incDate").value||today(),
-    source:document.getElementById("incSrc").value.trim()||"Income",amount:amt});
-  document.getElementById("incAmt").value="";document.getElementById("incSrc").value="";
-  save();renderIncome();
+  const fields={
+    date:document.getElementById("incDate").value||today(),
+    source:document.getElementById("incSrc").value.trim()||"Income",amount:amt
+  };
+  if(editingIncId){
+    const inc=state.income.find(x=>x.id===editingIncId);
+    if(inc)Object.assign(inc,fields);
+  }else{
+    state.income.push({id:uid(),...fields});
+  }
+  resetIncForm();
+  allTime=false;viewMonth=ym(fields.date);
+  save();renderIncome();renderDash();
 };
 document.getElementById("addJar").onclick=()=>{
   state.jars.push({id:uid(),name:"New jar",pct:0,type:"spend",color:PALETTE[state.jars.length%PALETTE.length]});
@@ -427,10 +541,60 @@ document.getElementById("resetJars").onclick=()=>{
   if(confirm("Reset your jars to the classic six? Your income and expenses stay.")){
     state.jars=structuredClone(DEFAULTS);save();renderSettings();renderDash();}
 };
-document.getElementById("exportBtn").onclick=()=>{
-  const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
-  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
-  a.download="jars-backup-"+today()+".json";a.click();URL.revokeObjectURL(a.href);
+async function exportData(){
+  const json=JSON.stringify(state,null,2);
+  const filename="jars-backup-"+today()+".json";
+  // Phones (iOS Safari): use the share sheet so the file can be saved to Files / AirDropped.
+  try{
+    const file=new File([json],filename,{type:"application/json"});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      await navigator.share({files:[file],title:filename});
+      return;
+    }
+  }catch(err){
+    if(err&&err.name==="AbortError")return;   // user closed the share sheet
+    // otherwise fall through to the download method
+  }
+  // Desktop browsers: trigger a normal file download.
+  const blob=new Blob([json],{type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");a.href=url;a.download=filename;
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1500);
+}
+document.getElementById("exportBtn").onclick=exportData;
+document.getElementById("importBtn").onclick=()=>document.getElementById("importFile").click();
+document.getElementById("importFile").onchange=(e)=>{
+  const file=e.target.files&&e.target.files[0];
+  e.target.value="";              // reset so the same file can be re-imported later
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onerror=()=>alert("Couldn't read that file. Try exporting a fresh backup.");
+  reader.onload=()=>{
+    let data;
+    try{data=JSON.parse(reader.result);}
+    catch(err){alert("That file isn't a valid Jars backup — it couldn't be read.");return;}
+    if(!data||!Array.isArray(data.jars)||!Array.isArray(data.income)||!Array.isArray(data.expenses)){
+      alert("That doesn't look like a Jars backup. A backup contains jars, income, and expenses.");return;
+    }
+    const hasData=state.income.length||state.expenses.length;
+    const msg=hasData
+      ? `Importing will REPLACE what's in this browser (${state.income.length} income and ${state.expenses.length} expense entries) with the backup. This can't be undone. Continue?`
+      : "Import this backup into this browser?";
+    if(!confirm(msg))return;
+    state={
+      jars:data.jars.map((j,i)=>({
+        id:j.id||uid(),name:j.name||"Jar",pct:Math.max(0,+j.pct||0),
+        type:j.type==="accumulate"?"accumulate":"spend",
+        color:j.color||PALETTE[i%PALETTE.length]
+      })),
+      income:data.income,
+      expenses:data.expenses
+    };
+    save();renderSettings();renderIncome();renderDash();
+    alert(`Imported ${state.income.length} income and ${state.expenses.length} expense entries.`);
+  };
+  reader.readAsText(file);
 };
 document.getElementById("wipeBtn").onclick=()=>{
   if(confirm("Erase ALL income and expenses? This can't be undone.")){
