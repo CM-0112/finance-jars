@@ -21,15 +21,16 @@
     -webkit-font-smoothing:antialiased;line-height:1.45;}
   .num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;}
   .app{max-width:760px;margin:0 auto;padding:0 16px 120px;}
-  header.top{padding:22px 2px 8px;display:flex;align-items:center;justify-content:space-between;gap:12px;}
+  header.top{padding:22px 2px 8px;display:flex;flex-direction:column;gap:16px;}
   .brand{display:flex;align-items:center;gap:10px;}
   .mark{width:30px;height:30px;border-radius:8px;background:var(--ink);position:relative;flex:none;}
   .mark::after{content:"";position:absolute;left:6px;right:6px;bottom:5px;height:11px;border-radius:0 0 4px 4px;background:var(--gold);}
   .mark::before{content:"";position:absolute;left:9px;right:9px;top:6px;height:4px;border-radius:2px;background:#fff;opacity:.85;}
   h1{font-size:20px;letter-spacing:-.02em;color:var(--ink);font-weight:700;}
-  .summary{text-align:right;}
-  .summary .lbl{font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);}
-  .summary .big{font-size:22px;font-weight:700;color:var(--ink);letter-spacing:-.02em;}
+  .stats{display:flex;gap:12px;align-items:stretch;}
+  .stat{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;}
+  .stat .lbl{font-size:10px;letter-spacing:.03em;text-transform:uppercase;color:var(--muted);line-height:1.25;margin-bottom:2px;}
+  .stat .big{font-size:17px;font-weight:700;color:var(--ink);letter-spacing:-.02em;}
 
   nav.tabs{display:flex;gap:4px;background:#E2E7E5;border-radius:12px;padding:4px;margin:14px 0 18px;}
   nav.tabs button{flex:1;border:0;background:transparent;padding:10px 8px;border-radius:9px;
@@ -158,9 +159,10 @@
       <div class="mark" aria-hidden="true"></div>
       <h1>Jars</h1>
     </div>
-    <div class="summary">
-      <div class="lbl">Income tracked</div>
-      <div class="big num" id="sumIncome">$0</div>
+    <div class="stats">
+      <div class="stat"><div class="lbl">Income tracked</div><div class="big num" id="sumIncome">$0</div></div>
+      <div class="stat"><div class="lbl">Total spending</div><div class="big num" id="sumSpend">$0</div></div>
+      <div class="stat"><div class="lbl">Total accumulating</div><div class="big num" id="sumAccum">$0</div></div>
     </div>
   </header>
 
@@ -305,11 +307,13 @@ const inScope=d=>allTime||ym(d)===viewMonth;
 function renderDash(){
   updateMonthBar();
   const scopeIncome=state.income.filter(i=>inScope(i.date)).reduce((s,i)=>s+(+i.amount||0),0);
-  document.getElementById("sumIncome").textContent=fmt0.format(scopeIncome);
+  document.getElementById("sumIncome").textContent=fmt.format(scopeIncome);
   const grid=document.getElementById("jarGrid");grid.innerHTML="";
+  let totalSpend=0,totalAccum=0;
   state.jars.forEach(j=>{
     const alloc=scopeIncome*(j.pct/100);
     const spent=state.expenses.filter(e=>e.jarId===j.id&&inScope(e.date)).reduce((s,e)=>s+(+e.amount||0),0);
+    if(j.type==="spend"){totalSpend+=spent;}else{totalAccum+=(alloc-spent);}
     let headline,sub,fill,over=false,goalMet=false;
     if(j.type==="spend"){
       // spending jars (any scope): budget remaining
@@ -347,6 +351,8 @@ function renderDash(){
     const liq=card.querySelector(".liquid");
     requestAnimationFrame(()=>{liq.style.height=target+"%";});
   });
+  document.getElementById("sumSpend").textContent=fmt.format(totalSpend);
+  document.getElementById("sumAccum").textContent=fmt.format(totalAccum);
   const ap=document.getElementById("activityPanel");
   if(allTime){ap.style.display="none";}
   else{ap.style.display="";renderExpList();}
