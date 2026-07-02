@@ -88,6 +88,8 @@
   .empty{color:var(--muted);font-size:13.5px;padding:6px 0 2px;}
 
   label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);margin:0 0 5px;}
+  .sublbl{font-size:11px;font-weight:600;color:var(--muted);margin:0 0 4px;}
+  .opt{font-weight:400;color:var(--muted);}
   input,select{width:100%;min-width:0;font:inherit;padding:11px 12px;border:1px solid var(--line);
     border-radius:10px;background:#fff;color:var(--text);min-height:var(--tap);}
   input:focus,select:focus{outline:2px solid var(--ink);outline-offset:1px;border-color:var(--ink);}
@@ -160,7 +162,7 @@
       <h1>Jars</h1>
     </div>
     <div class="stats">
-      <div class="stat"><div class="lbl">Income tracked</div><div class="big num" id="sumIncome">$0</div></div>
+      <div class="stat"><div class="lbl" id="incomeLbl">Income to allocate</div><div class="big num" id="sumIncome">$0</div></div>
       <div class="stat"><div class="lbl">Total spending</div><div class="big num" id="sumSpend">$0</div></div>
       <div class="stat"><div class="lbl">Total accumulating</div><div class="big num" id="sumAccum">$0</div></div>
     </div>
@@ -199,8 +201,15 @@
       <div class="two">
         <div class="field"><label for="incSrc">Source</label>
           <input id="incSrc" type="text" placeholder="Paycheck"></div>
-        <div class="field"><label for="incDate">Date</label>
+        <div class="field"><label for="incDate">Received</label>
           <input id="incDate" type="date"></div>
+      </div>
+      <div class="field">
+        <label>Earned period <span class="opt">(optional)</span></label>
+        <div class="two">
+          <div><label for="incEarnStart" class="sublbl">From</label><input id="incEarnStart" type="date"></div>
+          <div><label for="incEarnEnd" class="sublbl">To</label><input id="incEarnEnd" type="date"></div>
+        </div>
       </div>
       <button class="btn primary" id="addInc">Add income</button>
       <button class="btn ghost" id="cancelInc" style="width:100%;margin-top:8px;display:none;">Cancel edit</button>
@@ -299,6 +308,27 @@ const ym=d=>(d||"").slice(0,7);
 const thisYM=()=>today().slice(0,7);
 function monthLabel(m){const [y,mo]=m.split("-");return new Date(+y,+mo-1,1).toLocaleString("en-US",{month:"long",year:"numeric"});}
 function shiftMonth(m,delta){const [y,mo]=m.split("-").map(Number);const d=new Date(y,mo-1+delta,1);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");}
+function parseDate(s){const p=(s||"").split("-").map(Number);return new Date(p[0],(p[1]||1)-1,p[2]||1);}
+// Portion of an income entry earned in calendar month targetYM, splitting the amount evenly across the days of its earned period (falls back to the received date when no valid period is set).
+function earnedInMonth(entry,targetYM){
+  const amt=+entry.amount||0;
+  let start,end;
+  if(entry.earnedStart&&entry.earnedEnd&&entry.earnedEnd>=entry.earnedStart){start=entry.earnedStart;end=entry.earnedEnd;}
+  else{start=end=entry.date;}
+  if(!start||!end)return 0;
+  const e=parseDate(end);let total=0,hit=0;
+  for(let d=parseDate(start);d<=e;d.setDate(d.getDate()+1)){
+    total++;
+    if(d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")===targetYM)hit++;
+  }
+  return total>0?amt*hit/total:0;
+}
+// Income available to allocate in the current scope: all income (all time), or income earned in the previous month (a specific month funds the following month).
+function fundingIncome(){
+  if(allTime)return state.income.reduce((s,i)=>s+(+i.amount||0),0);
+  const prev=shiftMonth(viewMonth,-1);
+  return state.income.reduce((s,i)=>s+earnedInMonth(i,prev),0);
+}
 let allTime=false;
 let viewMonth=thisYM();
 const inScope=d=>allTime||ym(d)===viewMonth;
@@ -306,7 +336,8 @@ const inScope=d=>allTime||ym(d)===viewMonth;
 /* ---------- Dashboard ---------- */
 function renderDash(){
   updateMonthBar();
-  const scopeIncome=state.income.filter(i=>inScope(i.date)).reduce((s,i)=>s+(+i.amount||0),0);
+  const scopeIncome=fundingIncome();
+  document.getElementById("incomeLbl").textContent=allTime?"Total income":"Income to allocate";
   document.getElementById("sumIncome").textContent=fmt.format(scopeIncome);
   const grid=document.getElementById("jarGrid");grid.innerHTML="";
   let totalSpend=0,totalAccum=0;
@@ -400,8 +431,9 @@ function renderIncome(){
   box.innerHTML="";
   items.forEach(i=>{
     const row=document.createElement("div");row.className="row";
+    const earned=(i.earnedStart&&i.earnedEnd)?` · earned ${i.earnedStart} – ${i.earnedEnd}`:"";
     row.innerHTML=`<div class="meta"><div class="t">${escapeHtml(i.source||"Income")}</div>
-        <div class="s">${i.date||""}</div></div>
+        <div class="s">Received ${i.date||""}${earned}</div></div>
       <div style="display:flex;align-items:center;gap:2px;">
         <span class="amt num" style="color:var(--good)">+${fmt.format(+i.amount||0)}</span>
         <button class="iconbtn editInc" aria-label="Edit income"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
@@ -510,6 +542,8 @@ function resetIncForm(){
   document.getElementById("incAmt").value="";
   document.getElementById("incSrc").value="";
   document.getElementById("incDate").value=today();
+  document.getElementById("incEarnStart").value="";
+  document.getElementById("incEarnEnd").value="";
   document.getElementById("incFormTitle").textContent="Add income";
   document.getElementById("addInc").textContent="Add income";
   document.getElementById("cancelInc").style.display="none";
@@ -519,6 +553,8 @@ function editIncome(inc){
   document.getElementById("incAmt").value=inc.amount;
   document.getElementById("incSrc").value=inc.source||"";
   document.getElementById("incDate").value=inc.date||today();
+  document.getElementById("incEarnStart").value=inc.earnedStart||"";
+  document.getElementById("incEarnEnd").value=inc.earnedEnd||"";
   document.getElementById("incFormTitle").textContent="Edit income";
   document.getElementById("addInc").textContent="Save changes";
   document.getElementById("cancelInc").style.display="block";
@@ -529,9 +565,14 @@ document.getElementById("cancelInc").onclick=resetIncForm;
 document.getElementById("addInc").onclick=()=>{
   const amt=parseFloat(document.getElementById("incAmt").value);
   if(!(amt>0)){document.getElementById("incAmt").focus();return;}
+  const es=document.getElementById("incEarnStart").value;
+  const ee=document.getElementById("incEarnEnd").value;
+  const validPeriod=es&&ee&&ee>=es;
   const fields={
     date:document.getElementById("incDate").value||today(),
-    source:document.getElementById("incSrc").value.trim()||"Income",amount:amt
+    source:document.getElementById("incSrc").value.trim()||"Income",amount:amt,
+    earnedStart:validPeriod?es:null,
+    earnedEnd:validPeriod?ee:null
   };
   if(editingIncId){
     const inc=state.income.find(x=>x.id===editingIncId);
@@ -540,7 +581,7 @@ document.getElementById("addInc").onclick=()=>{
     state.income.push({id:uid(),...fields});
   }
   resetIncForm();
-  allTime=false;viewMonth=ym(fields.date);
+  allTime=false;viewMonth=shiftMonth(ym(validPeriod?ee:fields.date),1);
   save();renderIncome();renderDash();
 };
 document.getElementById("addJar").onclick=()=>{
