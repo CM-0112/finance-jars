@@ -27,10 +27,22 @@
   .mark::after{content:"";position:absolute;left:6px;right:6px;bottom:5px;height:11px;border-radius:0 0 4px 4px;background:var(--gold);}
   .mark::before{content:"";position:absolute;left:9px;right:9px;top:6px;height:4px;border-radius:2px;background:#fff;opacity:.85;}
   h1{font-size:20px;letter-spacing:-.02em;color:var(--ink);font-weight:700;}
-  .stats{display:flex;gap:12px;align-items:stretch;}
-  .stat{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:14px 16px;}
+  .stat{min-width:0;display:flex;flex-direction:column;justify-content:flex-end;}
   .stat .lbl{font-size:10px;letter-spacing:.03em;text-transform:uppercase;color:var(--muted);line-height:1.25;margin-bottom:2px;}
   .stat .big{font-size:17px;font-weight:700;color:var(--ink);letter-spacing:-.02em;}
+  .stat .big.neg{color:var(--danger);}
+  .statbtn{cursor:pointer;border-radius:8px;}
+  .statbtn:hover{color:var(--ink);}
+  .caret{font-size:9px;display:inline-block;transition:transform .15s;vertical-align:middle;}
+  .caret.open{transform:rotate(180deg);}
+  .cardbreakdown{background:var(--card);border:1px solid var(--line);border-radius:12px;
+    box-shadow:var(--shadow);padding:4px 14px;}
+  .cardbreakdown .cardrow{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+    padding:9px 0;border-top:1px solid var(--line);}
+  .cardbreakdown .cardrow:first-child{border-top:0;}
+  .cardbreakdown .cname{font-size:13.5px;font-weight:600;color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .cardbreakdown .camt{font-size:14px;font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums;}
 
   nav.tabs{display:flex;gap:4px;background:#E2E7E5;border-radius:12px;padding:4px;margin:14px 0 18px;}
   nav.tabs button{flex:1;border:0;background:transparent;padding:10px 8px;border-radius:9px;
@@ -161,11 +173,17 @@
       <div class="mark" aria-hidden="true"></div>
       <h1>Jars</h1>
     </div>
-    <div class="stats">
+    <div class="stats" id="statsRow">
       <div class="stat"><div class="lbl" id="incomeLbl">Income to allocate</div><div class="big num" id="sumIncome">$0</div></div>
       <div class="stat"><div class="lbl">Total spending</div><div class="big num" id="sumSpend">$0</div></div>
       <div class="stat"><div class="lbl">Total accumulating</div><div class="big num" id="sumAccum">$0</div></div>
+      <div class="stat"><div class="lbl">Account balance</div><div class="big num" id="acctBal">$0</div></div>
+      <div class="stat statbtn" id="cardStat" role="button" tabindex="0" aria-expanded="false">
+        <div class="lbl">Credit card total <span class="caret" id="cardCaret">▾</span></div>
+        <div class="big num" id="sumCards">$0</div>
+      </div>
     </div>
+    <div class="cardbreakdown" id="cardBreakdown" hidden></div>
   </header>
 
   <div class="storebar" id="storebar">Heads up: this preview can't save between sessions. Download the file and open it in your own browser to keep your data.</div>
@@ -262,6 +280,8 @@
     </div>
     <div class="field"><label for="expPaid">Paid with</label>
       <select id="expPaid"><option>Cash / Debit</option><option>Credit card</option></select></div>
+    <div class="field" id="cardNameField"><label for="expCard">Credit card name</label>
+      <input id="expCard" type="text" placeholder="e.g. Amex"></div>
     <button class="btn primary" id="saveExp">Save expense</button>
     <button class="btn ghost" id="cancelExp" style="width:100%;margin-top:8px;">Cancel</button>
   </div>
@@ -384,10 +404,49 @@ function renderDash(){
   });
   document.getElementById("sumSpend").textContent=fmt.format(totalSpend);
   document.getElementById("sumAccum").textContent=fmt.format(totalAccum);
+  renderRail();
   const ap=document.getElementById("activityPanel");
   if(allTime){ap.style.display="none";}
   else{ap.style.display="";renderExpList();}
 }
+// Account balance = received income minus all expenses, carried forward through the end of the scope.
+function accountBalance(){
+  const incInc=i=>allTime||ym(i.date)<=viewMonth;
+  const incExp=e=>allTime||ym(e.date)<=viewMonth;
+  const inc=state.income.filter(incInc).reduce((s,i)=>s+(+i.amount||0),0);
+  const exp=state.expenses.filter(incExp).reduce((s,e)=>s+(+e.amount||0),0);
+  return inc-exp;
+}
+// Totals of credit-card spending in scope, grouped by card name (case-insensitive, trimmed).
+function cardTotals(){
+  const map={};
+  state.expenses.filter(e=>e.paidWith==="Credit card"&&inScope(e.date)).forEach(e=>{
+    const raw=(e.cardName||"").trim()||"Credit card";
+    const key=raw.toLowerCase();
+    if(!map[key])map[key]={name:raw,total:0};
+    map[key].total+=(+e.amount||0);
+  });
+  return Object.values(map).sort((a,b)=>b.total-a.total);
+}
+let cardsOpen=false;
+function renderRail(){
+  const bal=accountBalance();
+  const balEl=document.getElementById("acctBal");
+  balEl.textContent=fmt.format(bal);
+  balEl.classList.toggle("neg",bal<-0.005);
+  const cards=cardTotals();
+  document.getElementById("sumCards").textContent=fmt.format(cards.reduce((s,c)=>s+c.total,0));
+  const bd=document.getElementById("cardBreakdown");
+  bd.innerHTML=cards.length
+    ? cards.map(c=>`<div class="cardrow"><span class="cname">${escapeHtml(c.name)}</span><span class="camt">${fmt.format(c.total)}</span></div>`).join("")
+    : `<div class="empty">No card spending ${allTime?"yet":"this month"}.</div>`;
+  bd.hidden=!cardsOpen;
+  document.getElementById("cardCaret").classList.toggle("open",cardsOpen);
+  document.getElementById("cardStat").setAttribute("aria-expanded",cardsOpen);
+}
+function toggleCards(){cardsOpen=!cardsOpen;renderRail();}
+document.getElementById("cardStat").onclick=toggleCards;
+document.getElementById("cardStat").onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();toggleCards();}};
 function updateMonthBar(){
   document.getElementById("monthLabel").textContent=allTime?"All time":monthLabel(viewMonth);
   document.getElementById("allTimeBtn").setAttribute("aria-pressed",allTime);
@@ -403,10 +462,11 @@ function renderExpList(){
   box.innerHTML="";
   items.forEach(e=>{
     const j=jarById(e.jarId)||{name:"—",color:"#999"};
+    const pw=e.paidWith==="Credit card"?((e.cardName&&e.cardName.trim())||"Credit card"):e.paidWith;
     const row=document.createElement("div");row.className="row";
     row.innerHTML=`<div class="meta">
         <div class="t"><span class="dot" style="background:${j.color}"></span>${escapeHtml(e.note||j.name)}</div>
-        <div class="s">${escapeHtml(j.name)} · ${e.date||""}${e.paidWith?(" · "+e.paidWith):""}</div>
+        <div class="s">${escapeHtml(j.name)} · ${e.date||""}${pw?(" · "+escapeHtml(pw)):""}</div>
       </div>
       <div style="display:flex;align-items:center;gap:2px;">
         <span class="amt num">−${fmt.format(+e.amount||0)}</span>
@@ -491,6 +551,8 @@ function openExp(exp){
   document.getElementById("expNote").value=exp?(exp.note||""):"";
   document.getElementById("expDate").value=exp?(exp.date||today()):today();
   document.getElementById("expPaid").value=exp?(exp.paidWith||"Credit card"):"Credit card";
+  document.getElementById("expCard").value=exp?(exp.cardName||""):"";
+  updateCardField();
   const chips=document.getElementById("jarChips");chips.innerHTML="";
   state.jars.forEach(j=>{
     const b=document.createElement("button");b.className="chip";b.type="button";
@@ -503,6 +565,11 @@ function openExp(exp){
   setTimeout(()=>document.getElementById("expAmt").focus(),120);
 }
 function closeExp(){document.getElementById("expScrim").classList.remove("open");editingExpId=null;}
+function updateCardField(){
+  document.getElementById("cardNameField").style.display=
+    document.getElementById("expPaid").value==="Credit card"?"block":"none";
+}
+document.getElementById("expPaid").onchange=updateCardField;
 
 /* ---------- wiring ---------- */
 function showTab(t){
@@ -520,11 +587,13 @@ document.getElementById("expScrim").onclick=e=>{if(e.target.id==="expScrim")clos
 document.getElementById("saveExp").onclick=()=>{
   const amt=parseFloat(document.getElementById("expAmt").value);
   if(!(amt>0)||!pickedJar){document.getElementById("expAmt").focus();return;}
+  const paidWith=document.getElementById("expPaid").value;
   const fields={
     date:document.getElementById("expDate").value||today(),
     jarId:pickedJar,amount:amt,
     note:document.getElementById("expNote").value.trim(),
-    paidWith:document.getElementById("expPaid").value
+    paidWith:paidWith,
+    cardName:paidWith==="Credit card"?document.getElementById("expCard").value.trim():""
   };
   if(editingExpId){
     const ex=state.expenses.find(x=>x.id===editingExpId);
